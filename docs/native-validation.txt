@@ -1,0 +1,4 @@
+make: Entering directory '/workspace/scratch/206503326401/projects/ofs2x-offshore-operations'
+make: Nothing to be done for 'all'.
+./build/test
+make: Leaving directory '/workspace/scratch/206503326401/projects/ofs2x-offshore-operations'
