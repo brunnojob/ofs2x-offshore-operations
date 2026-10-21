@@ -1,26 +1,41 @@
 # OFS2X Offshore Operations
 
-C++20 operations core based on the offshore fleet, crew and drill workflows shown in `ofs2x.mp4`.
+A native C++20 command-line engine for offshore crew management, emergency station staffing and timed safety drills. Its domain model enforces vessel-specific eligibility, certificate requirements and auditable attendance.
 
-## Capabilities
+## Demonstration
 
-- Crew registration and vessel assignment.
-- Station requirements with certificate expiry checks.
-- Timed drills using a monotonic clock.
-- Idempotent attendance and prevention of simultaneous station assignment.
-- Minimum staffing deficiencies and ordered audit events.
-- Repository interface for future persistence.
+[![Watch the offshore operations demonstration](evidence/preview.jpg)](https://github.com/brunnojob/ofs2x-offshore-operations/raw/refs/heads/main/evidence/demo.mp4)
 
-## Build and run
+**[Watch or download the demonstration (MP4)](https://github.com/brunnojob/ofs2x-offshore-operations/raw/refs/heads/main/evidence/demo.mp4)**
 
-Linux, GCC 12 or newer, GNU Make.
+[View the video on GitHub](https://github.com/brunnojob/ofs2x-offshore-operations/blob/main/evidence/demo.mp4)
+
+This video documents the reference offshore operations dashboard, not a recording of this command-line implementation. The original recording is stored in `evidence/demo.mp4`; its checksum is recorded in [evidence/provenance.json](evidence/provenance.json).
+
+## Features
+
+- Crew registration, activation and vessel assignment.
+- Station rules with staffing minimums and required certificates.
+- Certificate expiry checks against Unix timestamps.
+- Vessel isolation and prevention of simultaneous station assignments.
+- Idempotent attendance, station occupancy and staffing shortages.
+- Monotonic drill duration and prevention of completed drill ID reuse.
+- Ordered audit events with an extensible repository interface.
+- Mutex-protected operations and an independently synchronized memory repository.
+- Input validation, structured status reporting and native regression tests.
+
+## Requirements
+
+A C++20 compiler (GCC 12+ recommended), GNU Make and a compatible host environment.
+
+## Build and test
 
 ```sh
 make all test
 ./build/offshore
 ```
 
-The terminal accepts these commands:
+## Example session
 
 ```text
 crew alice vessel-1 1 BST 2000000000
@@ -30,27 +45,49 @@ start drill-1 vessel-1
 check-in alice muster 1800000000
 status
 check-in bob muster 1800000000
+status
 finish
 audit
 quit
 ```
 
-Certificate expiry and eligibility timestamps use Unix seconds. Certificates are supplied by the operator; this library does not issue or validate documents with external authorities. The application starts empty and keeps state in memory.
+Use `help` to print the command syntax.
+
+| Command | Purpose |
+| --- | --- |
+| `crew ID VESSEL ENABLED [CERT EXPIRY]...` | Register or update crew. |
+| `station ID MINIMUM [CERT]...` | Configure station requirements. |
+| `start ID VESSEL` | Start a vessel drill. |
+| `check-in CREW STATION UNIX_SECONDS` | Validate and register attendance. |
+| `status` | Print headcounts and shortages. |
+| `finish` | Finish the drill and report elapsed time. |
+| `audit` | Display sequential audit events. |
+| `help` | Show command usage. |
+| `quit` | Close the program. |
+
+Configuration is locked during active drills. Certificate expiry values must be greater than the check-in timestamp.
+
+## Project structure
+
+```text
+include/operations.hpp     Domain model and audit repository contract
+src/main.cpp               Command-line application
+tests/test.cpp             Regression suite
+docs/persistence.md        Persistence design notes
+evidence/demo.mp4          Original demonstration
+evidence/preview.jpg       Video cover image
+.github/workflows/ci.yml   Native CI checks
+Makefile                   Build and tests
+```
 
 ## Architecture
 
-`include/operations.hpp` contains the domain and repository contract. `src/main.cpp` exposes a terminal interface. `tests/test.cpp` covers expired certificates, vessel isolation, duplicate attendance, station conflicts and drill timing.
+The operations core is separate from the terminal interface. It stores crew, station rules and the active drill in memory. `Repository` defines audit event storage; `MemoryRepository` is its default adapter. Audit events are written before operational state changes so a failed append does not partially apply an action.
 
-Future persistence requirements: [docs/persistence.md](docs/persistence.md).
+This is an in-memory implementation. It does not restore state across application restarts, connect to a maritime authority or verify externally issued credentials. For durable storage requirements, see [persistence design](docs/persistence.md).
 
-## Video evidence
+## Credits
 
-[![Offshore operations reference](evidence/preview.jpg)](evidence/demo.mp4)
+Developed by **Brunno** — [brunnodev.store](https://brunnodev.store).
 
-[Open the original demonstration](evidence/demo.mp4)
-
-The video demonstrates the author's reference system. This repository is a new native implementation of the observed workflows, rather than the original dashboard source. The recording is not a test run of this implementation. Original filename and SHA-256 are recorded in [evidence/provenance.json](evidence/provenance.json).
-
-## Credits and license
-
-Created for [brunnodev.store](https://brunnodev.store/). MIT: [LICENSE](LICENSE).
+Released under the [MIT License](LICENSE).

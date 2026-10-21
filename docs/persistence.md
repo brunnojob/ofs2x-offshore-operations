@@ -1,9 +1,13 @@
 # Persistence boundary
 
-`Repository` defines audit append and read operations; `MemoryRepository` is the default adapter. Crew, station rules and active drills remain in the domain process.
+`Operations` owns crew, station requirements, assignments, completed drill identifiers and an active drill. `Repository` is an audit append/read interface, not a state-hydration contract. The default `MemoryRepository` is synchronized, but the application intentionally loses runtime state after shutdown.
 
-A future durable integration must store crew identifiers, vessel assignments, certificates, station rules, drill start/finish and attendance. Use a unique crew identifier, a unique drill identifier and a unique `(drill, crew)` attendance key. Preserve the distinction between Unix expiry timestamps and monotonic elapsed time.
+## Atomicity
 
-The current interface is an audit sink, not state hydration. Before enabling restart recovery, extend it with an explicit snapshot/load contract and commit domain changes and events in one transaction. Map persisted certificate records back to `Crew`, then register rules before starting a drill. Do not silently replay an active drill across process restarts: its monotonic timestamp belongs to the original process.
+The domain appends the audit event before mutating operational state. Adapters must either append an event in full or throw without side effects. A durable implementation must commit domain records and corresponding audit events within one database transaction, with failure recovery that preserves ordering.
 
-Do not perform side effects inside a failing `append`. Do not call the domain recursively from an adapter. No database implementation or connection string is included.
+## Storage and recovery
+
+A durable storage layer should model crew, certificates, vessels, stations, drills, attendance and events separately. Enforce unique crew and drill identifiers, a unique `(drill_id, crew_id)` attendance key, and sequential event ordering. Certificates use Unix timestamps; drill timing uses a monotonic clock during the process lifetime.
+
+Do not reconstruct a monotonic clock instant after restart. Restore wall-clock timestamps for reporting, explicitly mark incomplete drills, and add versioned snapshot/load operations before supporting restart recovery. This release does not provide a database adapter or restart recovery.

@@ -1,6 +1,17 @@
 #include "operations.hpp"
+#include <charconv>
 #include <iostream>
 #include <sstream>
+namespace {
+template <typename T>
+T parse_number(const std::string& token, const std::string& field) {
+    T value{};
+    const auto [position, error] = std::from_chars(token.data(), token.data() + token.size(), value);
+    if (error != std::errc{} || position != token.data() + token.size())
+        throw std::invalid_argument("invalid " + field + ": " + token);
+    return value;
+}
+}
 int main() {
     offshore::MemoryRepository repository;
     offshore::Operations operations(repository);
@@ -11,15 +22,23 @@ int main() {
             std::string command; input >> command;
             if (command == "crew") {
                 offshore::Crew crew; std::string kind; std::int64_t expiry;
-                if (!(input >> crew.id >> crew.vessel >> crew.enabled)) throw std::invalid_argument("crew ID VESSEL ENABLED [CERT EXPIRY]...");
+                std::string enabled;
+                if (!(input >> crew.id >> crew.vessel >> enabled)) throw std::invalid_argument("crew ID VESSEL ENABLED [CERT EXPIRY]...");
+                const auto flag = parse_number<unsigned>(enabled, "enabled");
+                if (flag > 1) throw std::invalid_argument("enabled must be 0 or 1");
+                crew.enabled = flag == 1;
                 while (input >> kind) {
-                    if (!(input >> expiry)) throw std::invalid_argument("certificate expiry required");
+                    std::string raw_expiry;
+                    if (!(input >> raw_expiry)) throw std::invalid_argument("certificate expiry required");
+                    expiry = parse_number<std::int64_t>(raw_expiry, "certificate expiry");
                     crew.certificates.push_back({kind, expiry});
                 }
                 operations.register_crew(std::move(crew));
             } else if (command == "station") {
                 offshore::Rule rule; std::string kind;
-                if (!(input >> rule.station >> rule.minimum)) throw std::invalid_argument("station ID MINIMUM [CERT]...");
+                std::string raw_minimum;
+                if (!(input >> rule.station >> raw_minimum)) throw std::invalid_argument("station ID MINIMUM [CERT]...");
+                rule.minimum = parse_number<std::size_t>(raw_minimum, "minimum");
                 while (input >> kind) rule.required.insert(kind);
                 operations.station(std::move(rule));
             } else if (command == "start") {
@@ -28,17 +47,24 @@ int main() {
                 operations.start(id, vessel, offshore::Clock::now());
             } else if (command == "check-in") {
                 std::string id, station; std::int64_t now;
-                if (!(input >> id >> station >> now)) throw std::invalid_argument("check-in CREW STATION UNIX_SECONDS");
+                std::string timestamp;
+                if (!(input >> id >> station >> timestamp)) throw std::invalid_argument("check-in CREW STATION UNIX_SECONDS");
+                now = parse_number<std::int64_t>(timestamp, "timestamp");
                 const auto result = operations.check_in(id, station, now);
                 std::cout << (result.eligible ? "accepted" : "denied") << '\n';
                 for (const auto& reason : result.failures) std::cout << reason << '\n';
             } else if (command == "status") {
-                for (const auto& item : operations.deficiencies()) std::cout << item << '\n';
+                const auto status = operations.status();
+                std::cout << (status.active ? "active" : "inactive") << '\n';
+                for (const auto& station : status.stations)
+                    std::cout << station.station << " " << station.assigned << "/" << station.minimum << " shortage=" << station.shortage << '\n';
             } else if (command == "finish") {
                 const auto result = operations.finish(offshore::Clock::now());
                 std::cout << result.id << ' ' << result.duration.count() << " seconds\n";
             } else if (command == "audit") {
                 for (const auto& e : repository.events()) std::cout << e.sequence << ' ' << e.action << ' ' << e.subject << '\n';
+            } else if (command == "help") {
+                std::cout << "crew ID VESSEL ENABLED [CERT EXPIRY]...\nstation ID MINIMUM [CERT]...\nstart ID VESSEL\ncheck-in CREW STATION UNIX_SECONDS\nstatus\nfinish\naudit\nquit\n";
             } else if (command == "quit") break;
             else throw std::invalid_argument("unknown command");
         } catch (const std::exception& e) { std::cerr << "error: " << e.what() << '\n'; }

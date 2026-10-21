@@ -1,5 +1,6 @@
 #include "operations.hpp"
 #include <cassert>
+#include <stdexcept>
 int main() {
     offshore::MemoryRepository repository;
     offshore::Operations operations(repository);
@@ -18,10 +19,21 @@ int main() {
     try { operations.check_in("a", "fire", 100); } catch (const std::logic_error&) { rejected = true; }
     assert(rejected);
     assert(operations.deficiencies().size() == 2);
+    assert(operations.status().active);
+    assert(operations.status().stations.at(1).assigned == 1);
     const auto result = operations.finish(start + offshore::Seconds(90));
     assert(result.duration.count() == 90);
     assert(result.attendance.at("muster").size() == 1);
+    assert(!operations.status().active);
+    rejected = false;
+    try { operations.start("d1", "v1", start); } catch (const std::logic_error&) { rejected = true; }
+    assert(rejected);
     rejected = false;
     try { operations.check_in("a", "muster", 100); } catch (const std::logic_error&) { rejected = true; }
     assert(rejected);
+    operations.start("d2", "v1", start);
+    assert(operations.status().stations.at(0).assigned == 0);
+    static_cast<void>(operations.finish(start));
+    const auto events = repository.events();
+    for (std::size_t i = 0; i < events.size(); ++i) assert(events[i].sequence == i + 1);
 }
