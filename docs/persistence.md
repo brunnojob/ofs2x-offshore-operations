@@ -4,7 +4,9 @@
 
 ## Atomicity
 
-The domain appends the audit event before mutating operational state. Adapters must either append an event in full or throw without side effects. A durable implementation must commit domain records and corresponding audit events within one database transaction, with failure recovery that preserves ordering.
+The domain appends the audit event before mutating operational state. Adapters must either append an event in full or throw without side effects. Subsequent in-memory mutations can still throw after an append succeeds; append-first ordering is not a transaction or a strong exception guarantee for the complete operation.
+
+A durable implementation must commit domain records and corresponding audit events within one database transaction, with failure recovery that preserves ordering.
 
 ## Storage and recovery
 

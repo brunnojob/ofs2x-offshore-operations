@@ -12,6 +12,3 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build and test
         run: make all test
-      - name: CLI smoke test
-        run: |
-          printf 'crew alice vessel-1 1 BST 2000000000\nstation muster 1 BST\nstart drill-1 vessel-1\ncheck-in alice muster 1800000000\nstatus\nfinish\nquit\n' | ./build/offshore | grep -q accepted

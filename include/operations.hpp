@@ -8,19 +8,53 @@
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace offshore {
 using Seconds = std::chrono::seconds;
 using Clock = std::chrono::steady_clock;
-struct Certificate { std::string kind; std::int64_t valid_until; };
-struct Crew { std::string id; std::string vessel; bool enabled; std::vector<Certificate> certificates; };
-struct Rule { std::string station; std::set<std::string> required; std::size_t minimum; };
-struct Decision { bool eligible; std::vector<std::string> failures; };
-struct DrillResult { std::string id; Seconds duration; std::map<std::string, std::set<std::string>> attendance; };
-struct Event { std::uint64_t sequence; std::string action; std::string subject; };
-struct StationStatus { std::string station; std::size_t assigned; std::size_t minimum; std::size_t shortage; };
-struct DrillStatus { std::string id; std::string vessel; bool active; std::vector<StationStatus> stations; };
+struct Certificate {
+    std::string kind;
+    std::int64_t valid_until;
+};
+struct Crew {
+    std::string id;
+    std::string vessel;
+    bool enabled;
+    std::vector<Certificate> certificates;
+};
+struct Rule {
+    std::string station;
+    std::set<std::string> required;
+    std::size_t minimum;
+};
+struct Decision {
+    bool eligible;
+    std::vector<std::string> failures;
+};
+struct DrillResult {
+    std::string id;
+    Seconds duration;
+    std::map<std::string, std::set<std::string>> attendance;
+};
+struct Event {
+    std::uint64_t sequence;
+    std::string action;
+    std::string subject;
+};
+struct StationStatus {
+    std::string station;
+    std::size_t assigned;
+    std::size_t minimum;
+    std::size_t shortage;
+};
+struct DrillStatus {
+    std::string id;
+    std::string vessel;
+    bool active;
+    std::vector<StationStatus> stations;
+};
 struct Repository {
     virtual ~Repository() = default;
     virtual void append(const Event&) = 0;
@@ -30,8 +64,14 @@ class MemoryRepository final : public Repository {
     mutable std::mutex mutex_;
     std::vector<Event> data_;
 public:
-    void append(const Event& event) override { std::lock_guard lock(mutex_); data_.push_back(event); }
-    [[nodiscard]] std::vector<Event> events() const override { std::lock_guard lock(mutex_); return data_; }
+    void append(const Event& event) override {
+        std::lock_guard lock(mutex_);
+        data_.push_back(event);
+    }
+    [[nodiscard]] std::vector<Event> events() const override {
+        std::lock_guard lock(mutex_);
+        return data_;
+    }
 };
 class Operations {
     mutable std::mutex mutex_;
@@ -88,14 +128,22 @@ public:
         std::lock_guard lock(mutex_);
         if (active_ || id.empty() || vessel.empty() || rules_.empty() || completed_drills_.contains(id)) throw std::logic_error("cannot start drill");
         emit("drill-started", id);
-        drill_ = std::move(id); vessel_ = std::move(vessel); started_ = now;
-        attendance_.clear(); assignments_.clear(); active_ = true;
+        drill_ = std::move(id);
+        vessel_ = std::move(vessel);
+        started_ = now;
+        attendance_.clear();
+        assignments_.clear();
+        active_ = true;
     }
     Decision check_in(const std::string& crew_id, const std::string& station_id, std::int64_t now) {
         std::lock_guard lock(mutex_);
         if (!active_) throw std::logic_error("no active drill");
+        if (now < 0) throw std::invalid_argument("timestamp must be non-negative");
         const auto result = evaluate(crew_.at(crew_id), rules_.at(station_id), now);
-        if (!result.eligible) { emit("check-in-denied", crew_id); return result; }
+        if (!result.eligible) {
+            emit("check-in-denied", crew_id);
+            return result;
+        }
         if (const auto assignment = assignments_.find(crew_id); assignment != assignments_.end()) {
             if (assignment->second != station_id) throw std::logic_error("crew assigned elsewhere");
             return result;
@@ -135,3 +183,4 @@ public:
     }
 };
 }
+

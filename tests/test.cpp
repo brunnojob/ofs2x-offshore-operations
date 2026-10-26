@@ -1,6 +1,28 @@
 #include "operations.hpp"
 #include <cassert>
 #include <stdexcept>
+template <typename Exception, typename Action>
+void expect_error(Action action) {
+    bool rejected = false;
+    try {
+        action();
+    } catch (const Exception&) {
+        rejected = true;
+    }
+    assert(rejected);
+}
+
+class FailingRepository final : public offshore::Repository {
+public:
+    void append(const offshore::Event&) override {
+        throw std::runtime_error("storage unavailable");
+    }
+
+    std::vector<offshore::Event> events() const override {
+        return {};
+    }
+};
+
 int main() {
     offshore::MemoryRepository repository;
     offshore::Operations operations(repository);
@@ -36,4 +58,30 @@ int main() {
     static_cast<void>(operations.finish(start));
     const auto events = repository.events();
     for (std::size_t i = 0; i < events.size(); ++i) assert(events[i].sequence == i + 1);
+
+    offshore::MemoryRepository edge_repository;
+    offshore::Operations edge(edge_repository);
+    edge.register_crew({"disabled", "v1", false, {{"BST", 200}}});
+    edge.register_crew({"valid", "v1", true, {{"BST", 200}}});
+    edge.station({"muster", {"BST"}, 1});
+    edge.start("edge", "v1", start);
+    const auto before = edge_repository.events().size();
+    expect_error<std::invalid_argument>([&] { edge.check_in("valid", "muster", -1); });
+    expect_error<std::out_of_range>([&] { edge.check_in("unknown", "muster", 100); });
+    expect_error<std::out_of_range>([&] { edge.check_in("valid", "unknown", 100); });
+    assert(edge_repository.events().size() == before);
+    assert(edge.status().stations.at(0).assigned == 0);
+    const auto disabled = edge.check_in("disabled", "muster", 100);
+    assert(!disabled.eligible);
+    assert(disabled.failures.at(0) == "disabled");
+    expect_error<std::invalid_argument>([&] { edge.station({"other", {}, 1}); });
+    expect_error<std::logic_error>([&] { edge.finish(start - offshore::Seconds(1)); });
+    assert(edge.status().active);
+
+    FailingRepository failing_repository;
+    offshore::Operations unavailable(failing_repository);
+    expect_error<std::runtime_error>([&] { unavailable.station({"muster", {}, 1}); });
+    assert(unavailable.status().stations.empty());
+    expect_error<std::runtime_error>([&] { unavailable.register_crew({"valid", "v1", true, {}}); });
 }
+
