@@ -1,4 +1,4 @@
-# OFS2X Offshore Operations
+# OFS2X Offshore Operations created by RF SOLUTIONS OFFSHORE and plublish by Team
 
 A native C++20 command-line engine for offshore crew management, emergency station staffing and timed safety drills. Its domain model enforces vessel-specific eligibility, certificate requirements and auditable attendance.
 
